@@ -1,0 +1,6 @@
+@Wud.Extensions.Http.DockerCompose.WebApi_HostAddress = http://localhost:5027
+
+GET {{Wud.Extensions.Http.DockerCompose.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
