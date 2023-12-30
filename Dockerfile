@@ -8,6 +8,7 @@ ARG TARGETPLATFORM
 # copy csproj and restore as distinct layers
 COPY *.sln .
 COPY Wud.Extensions.Http.DockerCompose.WebApi/*.csproj ./Wud.Extensions.Http.DockerCompose.WebApi/
+COPY Wud.Extensions.Http.DockerCompose.WebApi.Tests/*.csproj ./Wud.Extensions.Http.DockerCompose.WebApi.Tests/
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         RID=linux-x64 ; \
     elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
