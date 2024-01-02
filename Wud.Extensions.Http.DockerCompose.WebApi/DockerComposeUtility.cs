@@ -192,7 +192,7 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError("Unable to write to docker compose file {dockerFile} - {ex}", dockerFile, (ex.GetBaseException() ?? ex).Message);
+                    logger.LogError("Unable to write to docker compose file {dockerFile} - {ex}", dockerFile, (ex.GetBaseException() ?? ex).ToString());
                     return UpdateResult.UnableToUpdateDockerFile;
                 }
                 return UpdateResult.UpdatedSuccessfully;
