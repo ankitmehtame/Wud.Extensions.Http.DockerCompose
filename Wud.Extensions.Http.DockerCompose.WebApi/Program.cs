@@ -8,39 +8,29 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new OpenApiInfo
                 {
                     Version = AssemblyUtils.AssemblyVersion,
-                    Title = "http forwarder app",
+                    Title = "WUD Extensions - Http Docker Compose",
                     Description = "v" + AssemblyUtils.InfoVersion
                 }));
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.UpdateSerializerOptions();
+});
 builder.Services.AddSingleton<IEnvironmentProvider, EnvironmentProvider>();
-builder.Services.AddSingleton<DockerComposeUtility>();
+builder.Services.AddSingleton<IDockerComposeUtility, DockerComposeUtility>();
 
 var app = builder.Build();
 
-// if (app.Environment.IsDevelopment())
-// {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-// }
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 
-const string CONTAINER_NEW_VERSION_API = "/container-new-version";
-app.MapPost(CONTAINER_NEW_VERSION_API, async ([FromBody] WudContainer container, ILogger<Program> logger, DockerComposeUtility dockerComposeUtility) =>
-{
-    logger.LogInformation("{api} called - {container}", CONTAINER_NEW_VERSION_API, container);
-    var res = await dockerComposeUtility.UpdateDockerFileForContainer(container);
-    return res switch
-    {
-        UpdateResult.ContainerNotFound => Results.NotFound(res.ToString()),
-        UpdateResult.ImageNotFound => Results.NotFound(res.ToString()),
-        UpdateResult.NoDockerFiles => Results.NotFound(res.ToString()),
-        UpdateResult.AlreadyUpToDate => Results.Ok(res.ToString()),
-        UpdateResult.UpdatedSuccessfully => Results.Ok(res.ToString()),
-        UpdateResult.UnableToUpdateDockerFile => Results.Problem(res.ToString()),
-        _ => throw new NotSupportedException(res.ToString())
-    };
-})
+app.MapPost(Constants.Api.CONTAINER_NEW_VERSION_API, ([FromBody] WudContainer container, ContainerApis containerApis) => containerApis.ContainerNewVersionApi(container))
 .WithName("Container-New-Version")
+.WithOpenApi();
+
+app.MapPost(Constants.Api.CONTAINERS_SYNC_API, (ContainerApis containerApis) => containerApis.ContainersSyncApi())
+.WithName("Containers-Sync")
 .WithOpenApi();
 
 app.Run();

@@ -2,18 +2,16 @@
 
 namespace Wud.Extensions.Http.DockerCompose.WebApi;
 
-public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnvironmentProvider environmentProvider)
+public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnvironmentProvider environmentProvider) : IDockerComposeUtility
 {
-    public const string ENV_DOCKER_FILES_CSV = "DOCKER_FILES_CSV";
-
     private record DockerFilesEnv(int DockerFilesEnvHash, string[] PrevDockerFiles) { }
 
     private DockerFilesEnv? _prevDockerFiles = null;
 
 
-    private IEnumerable<string> GetDockerFiles()
+    public IEnumerable<string> GetDockerFiles()
     {
-        var envVar = environmentProvider.GetEnvironmentVariable(ENV_DOCKER_FILES_CSV) ?? string.Empty;
+        var envVar = environmentProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV) ?? string.Empty;
         var envHash = envVar.GetHashCode();
         var prev = _prevDockerFiles;
         var isPrevValid = prev != null && prev.DockerFilesEnvHash == envHash;
@@ -37,7 +35,9 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
 
     private record FindImageResult(FindResult Result, string? ImageTagValue, string? ServiceName);
 
-    private async Task<FindImageResult> GetDockerComposeImageValueForContainer(string dockerFile, string containerName)
+    private record ServiceNodeAction(YamlMappingNode ServiceNode, string ServiceName, string? ContainerName);
+
+    private async Task<bool> IterateDockerComposeServices(string dockerFile, Func<ServiceNodeAction, Task<bool>> serviceAction)
     {
         await Task.Yield();
         using var fileStream = new FileStream(dockerFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
@@ -49,7 +49,7 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
         if (servicesNode.Value as YamlMappingNode == null)
         {
             logger.LogError("Unable to find services in {dockerFile}", dockerFile);
-            return new FindImageResult(FindResult.ContainerNotFound, null, null);
+            return false;
         }
         var allServices = (YamlMappingNode)servicesNode.Value;
 
@@ -59,19 +59,88 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
             var serviceName = serviceNode.Key.ToString();
             var containerNameNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "container_name");
             var containerNameValue = ((YamlScalarNode)containerNameNode.Value).Value;
-            var isMatchingContainer = string.Equals(containerNameValue, containerName, StringComparison.OrdinalIgnoreCase);
-            if (!isMatchingContainer) continue;
-
-            var imageNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "image");
-            if (imageNode.Key == null)
-            {
-                logger.LogError("Unable to find image tag for {containerName} in docker file {dockerFile}", containerName, dockerFile);
-                return new FindImageResult(FindResult.ImageNotFound, ServiceName: serviceName, ImageTagValue: null);
-            }
-            var imageNodeValue = (imageNode.Value as YamlScalarNode)?.Value ?? string.Empty;
-            return new FindImageResult(FindResult.ImageFoundSuccessfully, ImageTagValue: imageNodeValue, ServiceName: serviceName);
+            var shouldContinue = await serviceAction.Invoke(new ServiceNodeAction(serviceChildren, ServiceName: serviceName, ContainerName: containerNameValue));
+            if (!shouldContinue) break;
         }
-        return new FindImageResult(FindResult.ContainerNotFound, null, null);
+        return true;
+    }
+
+    private async Task<FindImageResult> GetDockerComposeImageValueForContainer(string dockerFile, string containerName)
+    {
+        ServiceNodeAction? matchingContainerService = null;
+        var hasValidServices = await IterateDockerComposeServices(dockerFile, x =>
+        {
+            var isMatchingContainer = string.Equals(x.ContainerName, containerName, StringComparison.OrdinalIgnoreCase);
+            if (!isMatchingContainer) return Task.FromResult(true);
+            matchingContainerService = x;
+            return Task.FromResult(false);
+        });
+        if (!hasValidServices)
+        {
+            logger.LogError("Unable to find services in {dockerFile}", dockerFile);
+            return new FindImageResult(FindResult.ContainerNotFound, null, null);
+        }
+        if (matchingContainerService == null)
+        {
+            return new FindImageResult(FindResult.ContainerNotFound, null, null);
+        }
+        var imageNode = matchingContainerService.ServiceNode.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "image");
+        if (imageNode.Key == null)
+        {
+            logger.LogError("Unable to find image tag for {containerName} in docker file {dockerFile}", containerName, dockerFile);
+            return new FindImageResult(FindResult.ImageNotFound, ServiceName: matchingContainerService.ServiceName, ImageTagValue: null);
+        }
+        var imageNodeValue = (imageNode.Value as YamlScalarNode)?.Value ?? string.Empty;
+        return new FindImageResult(FindResult.ImageFoundSuccessfully, ImageTagValue: imageNodeValue, ServiceName: matchingContainerService.ServiceName);
+    }
+
+    // private async Task<FindImageResult> GetDockerComposeImageValueForContainer(string dockerFile, string containerName)
+    // {
+    //     await Task.Yield();
+    //     using var fileStream = new FileStream(dockerFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+    //     using var input = new StreamReader(fileStream);
+    //     var yamlStream = new YamlStream();
+    //     yamlStream.Load(input);
+    //     var root = (YamlMappingNode)yamlStream.Documents[0].RootNode;
+    //     var servicesNode = root.Children.FirstOrDefault(x => ((YamlScalarNode)x.Key).Value == "services");
+    //     if (servicesNode.Value as YamlMappingNode == null)
+    //     {
+    //         logger.LogError("Unable to find services in {dockerFile}", dockerFile);
+    //         return new FindImageResult(FindResult.ContainerNotFound, null, null);
+    //     }
+    //     var allServices = (YamlMappingNode)servicesNode.Value;
+
+    //     foreach (var serviceNode in allServices.Children)
+    //     {
+    //         if (serviceNode.Value is not YamlMappingNode serviceChildren) continue;
+    //         var serviceName = serviceNode.Key.ToString();
+    //         var containerNameNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "container_name");
+    //         var containerNameValue = ((YamlScalarNode)containerNameNode.Value).Value;
+    //         var isMatchingContainer = string.Equals(containerNameValue, containerName, StringComparison.OrdinalIgnoreCase);
+    //         if (!isMatchingContainer) continue;
+
+    //         var imageNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "image");
+    //         if (imageNode.Key == null)
+    //         {
+    //             logger.LogError("Unable to find image tag for {containerName} in docker file {dockerFile}", containerName, dockerFile);
+    //             return new FindImageResult(FindResult.ImageNotFound, ServiceName: serviceName, ImageTagValue: null);
+    //         }
+    //         var imageNodeValue = (imageNode.Value as YamlScalarNode)?.Value ?? string.Empty;
+    //         return new FindImageResult(FindResult.ImageFoundSuccessfully, ImageTagValue: imageNodeValue, ServiceName: serviceName);
+    //     }
+    //     return new FindImageResult(FindResult.ContainerNotFound, null, null);
+    // }
+
+    public async Task<string[]> GetContainerNamesFromDockerFile(string dockerFile)
+    {
+        List<string> containerNames = [];
+        var hasValidServices = await IterateDockerComposeServices(dockerFile, x =>
+        {
+            if (!string.IsNullOrWhiteSpace(x.ContainerName)) containerNames.Add(x.ContainerName);
+            return Task.FromResult(true);
+        });
+        if (!hasValidServices) return [];
+        return [.. containerNames];
     }
 
 
@@ -148,4 +217,11 @@ public enum UpdateResult
     UnableToUpdateDockerFile,
     AlreadyUpToDate,
     UpdatedSuccessfully,
+}
+
+public interface IDockerComposeUtility
+{
+    IEnumerable<string> GetDockerFiles();
+    Task<string[]> GetContainerNamesFromDockerFile(string dockerFile);
+    Task<UpdateResult> UpdateDockerFileForContainer(WudContainer container);
 }
