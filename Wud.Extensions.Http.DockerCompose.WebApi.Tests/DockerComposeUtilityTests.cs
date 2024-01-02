@@ -18,7 +18,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper)
         const string origFile = """Files/DummyDockerCompose01.yaml""";
         var tempFile = Path.Combine(Path.GetTempPath(), $"DockerCompose01-{Guid.NewGuid()}.yaml");
         File.Copy(origFile, tempFile, overwrite: true);
-        envProvider.GetEnvironmentVariable(DockerComposeUtility.ENV_DOCKER_FILES_CSV).Returns(tempFile);
+        envProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV).Returns(tempFile);
         var result = await utility.UpdateDockerFileForContainer(container);
         result.Should().Be(UpdateResult.UpdatedSuccessfully);
         var updatedLines = await File.ReadAllLinesAsync(tempFile);
@@ -47,7 +47,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper)
         const string origFile = """Files/DummyDockerCompose02.yaml""";
         var tempFile = Path.Combine(Path.GetTempPath(), $"DockerCompose02-{Guid.NewGuid()}.yaml");
         File.Copy(origFile, tempFile, overwrite: true);
-        envProvider.GetEnvironmentVariable(DockerComposeUtility.ENV_DOCKER_FILES_CSV).Returns(tempFile);
+        envProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV).Returns(tempFile);
         var result = await utility.UpdateDockerFileForContainer(container);
         result.Should().Be(UpdateResult.UpdatedSuccessfully);
         var updatedLines = await File.ReadAllLinesAsync(tempFile);
@@ -77,7 +77,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper)
         const string origFile = """Files/DummyDockerCompose03.yaml""";
         var tempFile = Path.Combine(Path.GetTempPath(), $"DockerCompose03-{Guid.NewGuid()}.yaml");
         File.Copy(origFile, tempFile, overwrite: true);
-        envProvider.GetEnvironmentVariable(DockerComposeUtility.ENV_DOCKER_FILES_CSV).Returns(tempFile);
+        envProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV).Returns(tempFile);
         var result = await utility.UpdateDockerFileForContainer(containerDummyImage);
         result.Should().Be(UpdateResult.UpdatedSuccessfully);
         var updatedLines = await File.ReadAllLinesAsync(tempFile);
@@ -96,5 +96,19 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper)
                 updatedLine.Should().Be(origLine, "Line number {0}", lineIndex + 1);
             }
         }
+    }
+
+    [Fact]
+    public async Task ShouldGetContainerNamesFromDockerFile()
+    {
+        var envProvider = Substitute.For<IEnvironmentProvider>();
+        var utility = new DockerComposeUtility(logger: outputHelper.ToLogger<DockerComposeUtility>(), environmentProvider: envProvider);
+        const string origFile = """Files/DummyDockerCompose02.yaml""";
+        var tempFile = Path.Combine(Path.GetTempPath(), $"DockerCompose03-{Guid.NewGuid()}.yaml");
+        File.Copy(origFile, tempFile, overwrite: true);
+        envProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV).Returns(tempFile);
+
+        var containers = await utility.GetContainerNamesFromDockerFile(tempFile);
+        containers.Should().BeEquivalentTo(["zigbee2mqtt", "homeassistant_db", "homeassistant_ha", "esphome"]);
     }
 }
