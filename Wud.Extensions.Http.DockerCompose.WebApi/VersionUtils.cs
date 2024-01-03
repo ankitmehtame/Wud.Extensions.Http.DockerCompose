@@ -15,5 +15,5 @@ public static class VersionUtils
     });
 
     public static readonly string InfoVersion = _version.Value.ToString();
-    public static readonly string AssemblyVersion = _version.Value.WithoutMetadata().ToVersion().ToString(3);
+    public static readonly string AssemblyVersion = _version.Value.WithoutPrereleaseOrMetadata().ToVersion().ToString(3);
 }
