@@ -9,17 +9,8 @@ public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility 
     {
         logger.LogInformation("{api} called - {container}", Constants.Api.CONTAINER_NEW_VERSION_API, container);
         var res = await dockerComposeUtility.UpdateDockerFileForContainer(container);
-        var responseJson = JsonSerializer.Serialize(new Dictionary<string, UpdateResult> { { container.Name, res } }, JsonUtils.Options);
-        return res switch
-        {
-            UpdateResult.ContainerNotFound => Results.NotFound(responseJson),
-            UpdateResult.ImageNotFound => Results.NotFound(responseJson),
-            UpdateResult.NoDockerFiles => Results.NotFound(responseJson),
-            UpdateResult.AlreadyUpToDate => Results.Ok(responseJson),
-            UpdateResult.UpdatedSuccessfully => Results.Ok(responseJson),
-            UpdateResult.UnableToUpdateDockerFile => Results.Problem(responseJson),
-            _ => throw new NotSupportedException(res.ToString())
-        };
+        var response = new Dictionary<string, UpdateResult> { { container.Name, res } };
+        return Results.Json(response, statusCode: GetStatusCode(res));
     }
 
     public async Task<IResult> ContainersSyncApi()
@@ -47,6 +38,26 @@ public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility 
             mapResult[container.Name] = res;
             logger.LogInformation("Container {container} result - {result}", container.Name, res.ToString());
         }
-        return Results.Ok(JsonSerializer.Serialize(mapResult, JsonUtils.Options));
+        
+        var statusCodes = mapResult.Values.Select(GetStatusCode).ToArray();
+        int finalStatusCode;
+        if (!statusCodes.Any()) finalStatusCode = StatusCodes.Status202Accepted;
+        else if (statusCodes.Distinct().Count() == 1) finalStatusCode = statusCodes.First();
+        else finalStatusCode = StatusCodes.Status206PartialContent;
+        return Results.Json(mapResult, statusCode: finalStatusCode);
+    }
+
+    private static int GetStatusCode(UpdateResult updateResult)
+    {
+        return updateResult switch
+        {
+            UpdateResult.ContainerNotFound => StatusCodes.Status404NotFound,
+            UpdateResult.ImageNotFound => StatusCodes.Status404NotFound,
+            UpdateResult.NoDockerFiles => StatusCodes.Status404NotFound,
+            UpdateResult.AlreadyUpToDate => StatusCodes.Status200OK,
+            UpdateResult.UpdatedSuccessfully => StatusCodes.Status200OK,
+            UpdateResult.UnableToUpdateDockerFile => StatusCodes.Status500InternalServerError,
+            _ => throw new NotSupportedException(updateResult.ToString())
+        };
     }
 }

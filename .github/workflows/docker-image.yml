@@ -31,12 +31,12 @@ jobs:
         setAllVars: true
       id: nbgv
 
-    - name: Versioning
+    - name: Versioning - Update projects
       run: |
         echo ${{ steps.nbgv.outputs.SemVer2 }}
         echo "Installing tool dotnet-setversion"
         dotnet tool install -g dotnet-setversion
-        echo "Setting version in projects"
+        echo "Setting version for projects"
         setversion --recursive ${{ steps.nbgv.outputs.SemVer2 }}
 
     - name: Test
