@@ -1,5 +1,4 @@
 ﻿using System.Collections.Frozen;
-using System.Text.Json;
 
 namespace Wud.Extensions.Http.DockerCompose.WebApi;
 
