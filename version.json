@@ -11,5 +11,21 @@
         "^refs/heads/master$",
         "^refs/heads/main$",
         "^refs/tags/v\\d+\\.\\d+"
-    ]
+    ],
+    "cloudBuild": {
+        "setVersionVariables": true,
+        "buildNumber": {
+            "enabled": true,
+            "includeCommitId": {
+                "when": "always",
+                "where": "buildMetadata"
+            }
+        }
+    },
+    "release": {
+        "tagName": "v{version}",
+        "branchName": "v{version}",
+        "versionIncrement": "build",
+        "firstUnstableTag": "alpha"
+    }
 }
