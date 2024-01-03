@@ -71,7 +71,7 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         res.Should().BeEquivalentTo(expectation, op => op.RespectingRuntimeTypes());
     }
 
-    private WudContainer CreateContainer(string containerSequence)
+    private static WudContainer CreateContainer(string containerSequence)
     {
         return new (Id: $"dummy-id-{containerSequence}", Name: $"container{containerSequence}", Watcher: "dummy-watcher", UpdateAvailable: null, Image: new WudContainerImage(Id: "dummy-image-id", Name: "homeassistant/home-assistant", Tag: new WudImageTag(Value: "2023.12.4", Semver: true), Created: DateTimeOffset.Now), Result: null);
     }
