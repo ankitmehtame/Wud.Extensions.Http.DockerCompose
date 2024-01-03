@@ -7,9 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new OpenApiInfo
 {
-    Version = AssemblyUtils.AssemblyVersion,
+    Version = VersionUtils.AssemblyVersion,
     Title = "WUD Extensions - Http Docker Compose",
-    Description = "v" + AssemblyUtils.InfoVersion
+    Description = "v" + VersionUtils.InfoVersion
 }));
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -35,5 +35,8 @@ app.MapPost(Constants.Api.CONTAINER_NEW_VERSION_API, ([FromBody] WudContainer co
 app.MapPost(Constants.Api.CONTAINERS_SYNC_API, (ContainerApis containerApis) => containerApis.ContainersSyncApi())
 .WithName("Containers-Sync")
 .WithOpenApi();
+
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+logger.LogInformation("Starting v{version}", VersionUtils.InfoVersion);
 
 app.Run();
