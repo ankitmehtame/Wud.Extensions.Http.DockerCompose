@@ -1,4 +1,5 @@
-﻿using YamlDotNet.RepresentationModel;
+﻿using System.Runtime.ExceptionServices;
+using YamlDotNet.RepresentationModel;
 
 namespace Wud.Extensions.Http.DockerCompose.WebApi;
 
@@ -109,6 +110,8 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
         return [.. containerNames];
     }
 
+    private static readonly HashSet<string> NoImageTagVersions = ["stable", "latest"];
+
 
     public async Task<UpdateResult> UpdateDockerFileForContainer(WudContainer container)
     {
@@ -125,7 +128,9 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
             }
             var imageNodeValue = imageFindResult.ImageTagValue;
             var expectedImageValue = $"{container.Image.Name}:{container.Image.Tag.Value}";
-            if (imageNodeValue == expectedImageValue)
+            var imageTagVersion = (imageNodeValue ?? string.Empty).Split(':', StringSplitOptions.TrimEntries).ElementAtOrDefault(1) ?? string.Empty;
+            logger.LogDebug("Found image tag version {imageTagVersion}, expected {expectedImageTagVersion}", imageTagVersion, container.Image.Tag.Value);
+            if (imageTagVersion == container.Image.Tag.Value || (string.IsNullOrEmpty(imageTagVersion) && NoImageTagVersions.Contains(container.Image.Tag.Value)))
             {
                 logger.LogDebug("Image tag of container {containerName} is already correct ({imageValue}) in docker compose file {dockerFile}", container.Name, expectedImageValue, dockerFile);
                 return UpdateResult.AlreadyUpToDate;
@@ -133,6 +138,8 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
             // Update image tag
             var newFile = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.yaml");
             logger.LogDebug("Writing to temp file {file}", newFile);
+            logger.LogDebug("Updating image with {expectedImageValue}", expectedImageValue);
+            var updated = false;
             using(var outStream = new StreamWriter(newFile))
             {
                 var foundService = false;
@@ -141,9 +148,22 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
                     var trimmedLine = line.TrimStart();
                     var serviceName = imageFindResult.ServiceName;
                     foundService = foundService || trimmedLine.StartsWith($"{serviceName}:");
-                    var newLine = foundService && trimmedLine.StartsWith($"image: {imageNodeValue}")
-                        ? line.Replace($"image: {imageNodeValue}", $"image: {expectedImageValue}")
-                        : line;
+                    string newLine;
+                    var possibility1Line = new { Original = $"image: {imageNodeValue}", New = $"image: {expectedImageValue}" };
+                    var possibility2Line = new { Original = $"image: '{imageNodeValue}'", New = $"image: '{expectedImageValue}'" };
+                    var possibility3Line = new { Original = $"image: \"{imageNodeValue}\"", New = $"image: \"{expectedImageValue}\"" };
+                    if (foundService && (trimmedLine.StartsWith(possibility1Line.Original) || trimmedLine.StartsWith(possibility2Line.Original) || trimmedLine.StartsWith(possibility3Line.Original)))
+                    {
+                        newLine = line
+                                    .Replace(possibility1Line.Original, possibility1Line.New)
+                                    .Replace(possibility2Line.Original, possibility2Line.New)
+                                    .Replace(possibility3Line.Original, possibility3Line.New);
+                        updated = true;
+                    }
+                    else
+                    {
+                        newLine = line;
+                    }
                     outStream.WriteLine(newLine);
                 }
                 await outStream.FlushAsync();
@@ -162,6 +182,10 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
                     return UpdateResult.UnableToUpdateDockerFile;
                 }
                 return UpdateResult.UpdatedSuccessfully;
+            }
+            if (!updated)
+            {
+                logger.LogWarning("Unable to find the correct image tag to update for {container} in {dockerFile}. Intended to update from {current} to {imageTagVersion}", container.Name, dockerFile, imageTagVersion, container.Image.Tag.Value);
             }
             return UpdateResult.UnableToUpdateDockerFile;
         }
