@@ -40,6 +40,7 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
     private async Task<bool> IterateDockerComposeServices(string dockerFile, Func<ServiceNodeAction, Task<bool>> serviceAction)
     {
         await Task.Yield();
+        logger.LogDebug("Opening file {file} for reading", dockerFile);
         using var fileStream = new FileStream(dockerFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
         using var input = new StreamReader(fileStream);
         var yamlStream = new YamlStream();
@@ -62,6 +63,8 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
             var shouldContinue = await serviceAction.Invoke(new ServiceNodeAction(serviceChildren, ServiceName: serviceName, ContainerName: containerNameValue));
             if (!shouldContinue) break;
         }
+        fileStream.Close();
+        logger.LogDebug("Closed file {file}", dockerFile);
         return true;
     }
 
@@ -93,43 +96,6 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
         var imageNodeValue = (imageNode.Value as YamlScalarNode)?.Value ?? string.Empty;
         return new FindImageResult(FindResult.ImageFoundSuccessfully, ImageTagValue: imageNodeValue, ServiceName: matchingContainerService.ServiceName);
     }
-
-    // private async Task<FindImageResult> GetDockerComposeImageValueForContainer(string dockerFile, string containerName)
-    // {
-    //     await Task.Yield();
-    //     using var fileStream = new FileStream(dockerFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
-    //     using var input = new StreamReader(fileStream);
-    //     var yamlStream = new YamlStream();
-    //     yamlStream.Load(input);
-    //     var root = (YamlMappingNode)yamlStream.Documents[0].RootNode;
-    //     var servicesNode = root.Children.FirstOrDefault(x => ((YamlScalarNode)x.Key).Value == "services");
-    //     if (servicesNode.Value as YamlMappingNode == null)
-    //     {
-    //         logger.LogError("Unable to find services in {dockerFile}", dockerFile);
-    //         return new FindImageResult(FindResult.ContainerNotFound, null, null);
-    //     }
-    //     var allServices = (YamlMappingNode)servicesNode.Value;
-
-    //     foreach (var serviceNode in allServices.Children)
-    //     {
-    //         if (serviceNode.Value is not YamlMappingNode serviceChildren) continue;
-    //         var serviceName = serviceNode.Key.ToString();
-    //         var containerNameNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "container_name");
-    //         var containerNameValue = ((YamlScalarNode)containerNameNode.Value).Value;
-    //         var isMatchingContainer = string.Equals(containerNameValue, containerName, StringComparison.OrdinalIgnoreCase);
-    //         if (!isMatchingContainer) continue;
-
-    //         var imageNode = serviceChildren.FirstOrDefault(n => (n.Key as YamlScalarNode)?.Value == "image");
-    //         if (imageNode.Key == null)
-    //         {
-    //             logger.LogError("Unable to find image tag for {containerName} in docker file {dockerFile}", containerName, dockerFile);
-    //             return new FindImageResult(FindResult.ImageNotFound, ServiceName: serviceName, ImageTagValue: null);
-    //         }
-    //         var imageNodeValue = (imageNode.Value as YamlScalarNode)?.Value ?? string.Empty;
-    //         return new FindImageResult(FindResult.ImageFoundSuccessfully, ImageTagValue: imageNodeValue, ServiceName: serviceName);
-    //     }
-    //     return new FindImageResult(FindResult.ContainerNotFound, null, null);
-    // }
 
     public async Task<string[]> GetContainerNamesFromDockerFile(string dockerFile)
     {
@@ -188,11 +154,11 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
                 logger.LogDebug("Replacing original file with new one");
                 try
                 {
-                    File.Move(newFile, dockerFile, true);
+                    FileUtils.Move(newFile, dockerFile, true);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError("Unable to write to docker compose file {dockerFile} - {ex}", dockerFile, (ex.GetBaseException() ?? ex).ToString());
+                    logger.LogError("Unable to write to docker compose file {dockerFile} - {ex}", dockerFile, ex.Cause());
                     return UpdateResult.UnableToUpdateDockerFile;
                 }
                 return UpdateResult.UpdatedSuccessfully;

@@ -1,6 +1,4 @@
-﻿using Microsoft.VisualBasic;
-
-namespace Wud.Extensions.Http.DockerCompose.WebApi;
+﻿namespace Wud.Extensions.Http.DockerCompose.WebApi;
 
 public class WudService(ILogger<WudService> logger, IHttpClientFactory httpClientFactory, IEnvironmentProvider environmentProvider) : IWudService
 {
@@ -15,7 +13,7 @@ public class WudService(ILogger<WudService> logger, IHttpClientFactory httpClien
         }
         catch (Exception ex)
         {
-            logger.LogError("Unable to get WUD containers from {wudContainersUrl} - {ex}", wudContainersUrl, (ex.GetBaseException() ?? ex).ToString());
+            logger.LogError("Unable to get WUD containers from {wudContainersUrl} - {ex}", wudContainersUrl, ex.Cause());
             throw;
         }
     }
