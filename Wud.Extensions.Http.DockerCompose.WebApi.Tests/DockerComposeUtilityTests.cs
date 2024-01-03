@@ -68,7 +68,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper) : IDispos
             }
         }
     }
-    
+
     [Fact]
     public async Task ShouldUpdateDockerFileForContainerWhichHasSameImageInMultipleContainers()
     {
@@ -86,7 +86,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper) : IDispos
         for (var lineIndex = 0; lineIndex < origLines.Length - 1; lineIndex++)
         {
             var origLine = origLines[lineIndex].TrimEnd();
-            var updatedLine = updatedLines[lineIndex].TrimEnd();            
+            var updatedLine = updatedLines[lineIndex].TrimEnd();
             if (origLine.Trim().StartsWith("image: dummy-image:2023.12 #my-comment"))
             {
                 updatedLine.Trim().Should().Be("image: dummy-image:2023.12.4 #my-comment", "Line number {0}", lineIndex + 1);
@@ -131,7 +131,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task ShouldNotUpdateDockerFileForContainerWhichIsStable()
+    public async Task ShouldNotUpdateDockerFileForContainerWhichIsLatest()
     {
         var envProvider = Substitute.For<IEnvironmentProvider>();
         var utility = new DockerComposeUtility(logger: outputHelper.ToLogger<DockerComposeUtility>(), environmentProvider: envProvider);
@@ -139,7 +139,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper) : IDispos
         var tempFile = GetNewTempFilePath($"DockerCompose02-{Guid.NewGuid()}.yaml");
         File.Copy(origFile, tempFile, overwrite: true);
         envProvider.GetEnvironmentVariable(Constants.Env.DOCKER_FILES_CSV).Returns(tempFile);
-        
+
         var container1 = CreateContainer(containerName: "zigbee2mqtt", imageName: "koenkk/zigbee2mqtt", imageTag: "latest");
         var result1 = await utility.UpdateDockerFileForContainer(container1);
         result1.Should().Be(UpdateResult.AlreadyUpToDate);
@@ -179,7 +179,7 @@ public class DockerComposeUtilityTests(ITestOutputHelper outputHelper) : IDispos
 
     private static WudContainer CreateContainer(string containerName, string imageName, string imageTag)
     {
-        return new (Id: $"dummy-id-{containerName}", Name: containerName, Watcher: "dummy-watcher", UpdateAvailable: null, Image: new WudContainerImage(Id: "dummy-image-id", Name: imageName, Tag: new WudImageTag(Value: imageTag, Semver: true), Created: DateTimeOffset.Now), Result: null);
+        return new(Id: $"dummy-id-{containerName}", Name: containerName, Watcher: "dummy-watcher", UpdateAvailable: null, Image: new WudContainerImage(Id: "dummy-image-id", Name: imageName, Tag: new WudImageTag(Value: imageTag, Semver: true), Created: DateTimeOffset.Now), Result: null);
     }
 
     public void Dispose()
