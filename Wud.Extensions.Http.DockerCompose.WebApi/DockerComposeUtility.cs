@@ -110,7 +110,7 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
         return [.. containerNames];
     }
 
-    private static readonly HashSet<string> NoImageTagVersions = ["stable", "latest"];
+    private static readonly HashSet<string> NoImageTagVersions = ["latest"];
 
 
     public async Task<UpdateResult> UpdateDockerFileForContainer(WudContainer container)
@@ -140,10 +140,10 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
             logger.LogDebug("Writing to temp file {file}", newFile);
             logger.LogDebug("Updating image with {expectedImageValue}", expectedImageValue);
             var updated = false;
-            using(var outStream = new StreamWriter(newFile))
+            using (var outStream = new StreamWriter(newFile))
             {
                 var foundService = false;
-                await foreach(var line in File.ReadLinesAsync(dockerFile))
+                await foreach (var line in File.ReadLinesAsync(dockerFile))
                 {
                     var trimmedLine = line.TrimStart();
                     var serviceName = imageFindResult.ServiceName;
