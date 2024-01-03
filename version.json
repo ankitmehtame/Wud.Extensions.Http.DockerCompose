@@ -13,9 +13,10 @@
         "^refs/tags/v\\d+\\.\\d+"
     ],
     "cloudBuild": {
-        "setVersionVariables": true,
+        "setVersionVariables": false,
+        "setAllVariables": false,
         "buildNumber": {
-            "enabled": true,
+            "enabled": false,
             "includeCommitId": {
                 "when": "always",
                 "where": "buildMetadata"
