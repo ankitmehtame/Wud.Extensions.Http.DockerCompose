@@ -1,8 +1,5 @@
-﻿using System.Text.Json;
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 using NSubstitute;
 using Xunit.Abstractions;
 
@@ -23,11 +20,6 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService);
         
         var res = await containersApi.ContainerNewVersionApi(container);
-
-        // res.Should().BeAssignableTo<IStatusCodeActionResult>();
-        // ((IStatusCodeActionResult)res).StatusCode.Should().Be(((IStatusCodeActionResult)expectation).StatusCode);
-
-        
 
         res.Should().BeEquivalentTo(expectation, op => op.RespectingRuntimeTypes());
     }
