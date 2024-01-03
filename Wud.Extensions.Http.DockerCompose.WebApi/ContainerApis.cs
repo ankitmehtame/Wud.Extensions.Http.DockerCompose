@@ -42,7 +42,8 @@ public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility 
         int finalStatusCode;
         if (!statusCodes.Any()) finalStatusCode = StatusCodes.Status202Accepted;
         else if (statusCodes.Distinct().Count() == 1) finalStatusCode = statusCodes.First();
-        else finalStatusCode = StatusCodes.Status206PartialContent;
+        else if (statusCodes.Any(code => code < 300)) finalStatusCode = StatusCodes.Status206PartialContent;
+        else finalStatusCode = statusCodes.Max();
         return Results.Json(mapResult, statusCode: finalStatusCode);
     }
 

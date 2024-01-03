@@ -1,5 +1,8 @@
-﻿using FluentAssertions;
+﻿using System.Text.Json;
+using FluentAssertions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using NSubstitute;
 using Xunit.Abstractions;
 
@@ -21,23 +24,51 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         
         var res = await containersApi.ContainerNewVersionApi(container);
 
+        // res.Should().BeAssignableTo<IStatusCodeActionResult>();
+        // ((IStatusCodeActionResult)res).StatusCode.Should().Be(((IStatusCodeActionResult)expectation).StatusCode);
+
+        
+
         res.Should().BeEquivalentTo(expectation, op => op.RespectingRuntimeTypes());
     }
 
     public static TheoryData<UpdateResult, IResult> ContainerNewVersionApiResults() {
         return new TheoryData<UpdateResult, IResult>
         {
-            { UpdateResult.UpdatedSuccessfully, Results.Ok("""{"homeassistant_ha":"UpdatedSuccessfully"}""") },
-            { UpdateResult.AlreadyUpToDate, Results.Ok("""{"homeassistant_ha":"AlreadyUpToDate"}""") },
-            { UpdateResult.NoDockerFiles, Results.NotFound("""{"homeassistant_ha":"NoDockerFiles"}""") },
-            { UpdateResult.ContainerNotFound, Results.NotFound("""{"homeassistant_ha":"ContainerNotFound"}""") },
-            { UpdateResult.ImageNotFound, Results.NotFound("""{"homeassistant_ha":"ImageNotFound"}""") },
-            { UpdateResult.UnableToUpdateDockerFile, Results.Problem("""{"homeassistant_ha":"UnableToUpdateDockerFile"}""") },
+            { UpdateResult.UpdatedSuccessfully, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.UpdatedSuccessfully}}, statusCode: StatusCodes.Status200OK) },
+            { UpdateResult.AlreadyUpToDate, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.AlreadyUpToDate}}, statusCode: StatusCodes.Status200OK ) },
+            { UpdateResult.NoDockerFiles, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.NoDockerFiles}}, statusCode: StatusCodes.Status404NotFound) },
+            { UpdateResult.ContainerNotFound, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.ContainerNotFound}}, statusCode: StatusCodes.Status404NotFound) },
+            { UpdateResult.ImageNotFound, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.ImageNotFound}}, statusCode: StatusCodes.Status404NotFound) },
+            { UpdateResult.UnableToUpdateDockerFile, Results.Json(new Dictionary<string, UpdateResult> {{"homeassistant_ha", UpdateResult.UnableToUpdateDockerFile}}, statusCode: StatusCodes.Status500InternalServerError) },
         };
     }
 
     [Fact]
-    public async Task ShouldHandleContainersSyncApi()
+    public async Task ShouldHandleContainersSyncApiAllOkay()
+    {
+        await VerifyContainersSyncApi(UpdateResult.UpdatedSuccessfully, UpdateResult.AlreadyUpToDate, UpdateResult.UpdatedSuccessfully, UpdateResult.AlreadyUpToDate, StatusCodes.Status200OK);
+    }
+    
+    [Fact]
+    public async Task ShouldHandleContainersSyncApiPartialOkay()
+    {
+        await VerifyContainersSyncApi(UpdateResult.UpdatedSuccessfully, UpdateResult.AlreadyUpToDate, UpdateResult.ContainerNotFound, UpdateResult.ImageNotFound, StatusCodes.Status206PartialContent);
+    }
+
+    [Fact]
+    public async Task ShouldHandleContainersSyncApiAllNotFound()
+    {
+        await VerifyContainersSyncApi(UpdateResult.ImageNotFound, UpdateResult.ContainerNotFound, UpdateResult.ContainerNotFound, UpdateResult.ImageNotFound, StatusCodes.Status404NotFound);
+    }
+
+    [Fact]
+    public async Task ShouldHandleContainersSyncApiAllFailed()
+    {
+        await VerifyContainersSyncApi(UpdateResult.ImageNotFound, UpdateResult.ContainerNotFound, UpdateResult.UnableToUpdateDockerFile, UpdateResult.UnableToUpdateDockerFile, StatusCodes.Status500InternalServerError);
+    }
+
+    private async Task VerifyContainersSyncApi(UpdateResult container1Result, UpdateResult container2Result, UpdateResult container3Result, UpdateResult container4Result, int expectedStatusCode)
     {
         var envProvider = Substitute.For<IEnvironmentProvider>();
         var logger = outputHelper.ToLogger<ContainerApis>();
@@ -58,16 +89,22 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
 
         wudService.GetContainers().Returns(Task.FromResult<WudContainer[]>([container01, container02, container11, container12, container21, container22, container31, container32]));
 
-        dockerComposeUtility.UpdateDockerFileForContainer(container11).Returns(Task.FromResult(UpdateResult.UpdatedSuccessfully));
-        dockerComposeUtility.UpdateDockerFileForContainer(container12).Returns(Task.FromResult(UpdateResult.AlreadyUpToDate));
-        dockerComposeUtility.UpdateDockerFileForContainer(container21).Returns(Task.FromResult(UpdateResult.UpdatedSuccessfully));
-        dockerComposeUtility.UpdateDockerFileForContainer(container22).Returns(Task.FromResult(UpdateResult.AlreadyUpToDate));
+        dockerComposeUtility.UpdateDockerFileForContainer(container11).Returns(Task.FromResult(container1Result));
+        dockerComposeUtility.UpdateDockerFileForContainer(container12).Returns(Task.FromResult(container2Result));
+        dockerComposeUtility.UpdateDockerFileForContainer(container21).Returns(Task.FromResult(container3Result));
+        dockerComposeUtility.UpdateDockerFileForContainer(container22).Returns(Task.FromResult(container4Result));
         
         var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService);
         
         var res = await containersApi.ContainersSyncApi();
 
-        var expectation = Results.Ok("""{"container11":"UpdatedSuccessfully","container12":"AlreadyUpToDate","container21":"UpdatedSuccessfully","container22":"AlreadyUpToDate"}""");
+        var expectation = Results.Json(new Dictionary<string, UpdateResult>
+        {
+            {"container11", container1Result},
+            {"container12", container2Result},
+            {"container21", container3Result},
+            {"container22", container4Result}
+        }, statusCode: expectedStatusCode);
         res.Should().BeEquivalentTo(expectation, op => op.RespectingRuntimeTypes());
     }
 
