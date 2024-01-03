@@ -26,8 +26,6 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
-
 app.MapPost(Constants.Api.CONTAINER_NEW_VERSION_API, ([FromBody] WudContainer container, ContainerApis containerApis) => containerApis.ContainerNewVersionApi(container))
 .WithName("Container-New-Version")
 .WithOpenApi();

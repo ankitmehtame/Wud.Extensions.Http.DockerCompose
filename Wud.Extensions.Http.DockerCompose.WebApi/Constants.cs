@@ -4,8 +4,8 @@ public static class Constants
 {
     public static class Api
     {
-        public const string CONTAINERS_SYNC_API = "/containers-sync";
-        public const string CONTAINER_NEW_VERSION_API = "/container-new-version";
+        public const string CONTAINERS_SYNC_API = "/api/containers-sync";
+        public const string CONTAINER_NEW_VERSION_API = "/api/container-new-version";
     }
     public static class Env
     {
