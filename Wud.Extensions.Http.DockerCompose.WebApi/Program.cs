@@ -1,6 +1,9 @@
+using Hangfire;
+using Hangfire.MemoryStorage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using Wud.Extensions.Http.DockerCompose.WebApi;
+using Wud.Extensions.Http.DockerCompose.WebApi.Tests;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,10 +19,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.UpdateSerializerOptions();
 });
 builder.Services.AddHttpClient();
+builder.Services.AddHangfire(c => c.UseMemoryStorage());
+builder.Services.AddHangfireServer();
 builder.Services.AddSingleton<IEnvironmentProvider, EnvironmentProvider>();
 builder.Services.AddSingleton<IDockerComposeUtility, DockerComposeUtility>();
 builder.Services.AddSingleton<IWudService, WudService>();
 builder.Services.AddSingleton<ContainerApis>();
+builder.Services.AddSingleton<BackgroundJobCaller>();
+builder.Services.AddSingleton<IBackgroundJobHelper, BackgroundJobHelper>();
 
 var app = builder.Build();
 
@@ -36,5 +43,8 @@ app.MapPost(Constants.Api.CONTAINERS_SYNC_API, (ContainerApis containerApis) => 
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Starting v{version}", VersionUtils.InfoVersion);
+
+var bgHelper = app.Services.GetRequiredService<IBackgroundJobHelper>();
+await bgHelper.ScheduleRecurringBackgroundSyncJob();
 
 app.Run();

@@ -15,13 +15,17 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         var logger = outputHelper.ToLogger<ContainerApis>();
         var wudService = Substitute.For<IWudService>();
         var dockerComposeUtility = Substitute.For<IDockerComposeUtility>();
+        var backgroundJobHelper = Substitute.For<IBackgroundJobHelper>();
+        backgroundJobHelper.ScheduleOneTimeBackgroundSyncJobs().Returns(Task.CompletedTask);
+        
         WudContainer container = new (Id: "dummy-id", Name: "homeassistant_ha", Watcher: "dummy-watcher", UpdateAvailable: null, Image: new WudContainerImage(Id: "dummy-image-id", Name: "homeassistant/home-assistant", Tag: new WudImageTag(Value: "2023.12.4", Semver: true), Created: DateTimeOffset.Now), Result: null);
         dockerComposeUtility.UpdateDockerFileForContainer(container).Returns(updateResult);
-        var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService);
+        var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService, backgroundJobHelper: backgroundJobHelper);
         
         var res = await containersApi.ContainerNewVersionApi(container);
 
         res.Should().BeEquivalentTo(expectation, op => op.RespectingRuntimeTypes());
+        backgroundJobHelper.Received();
     }
 
     public static TheoryData<UpdateResult, IResult> ContainerNewVersionApiResults() {
@@ -66,6 +70,8 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         var logger = outputHelper.ToLogger<ContainerApis>();
         var wudService = Substitute.For<IWudService>();
         var dockerComposeUtility = Substitute.For<IDockerComposeUtility>();
+        var backgroundJobHelper = Substitute.For<IBackgroundJobHelper>();
+        
         var container01 = CreateContainer("01");
         var container02 = CreateContainer("02");
         var container11 = CreateContainer("11");
@@ -86,7 +92,7 @@ public class ContainerApisTests(ITestOutputHelper outputHelper)
         dockerComposeUtility.UpdateDockerFileForContainer(container21).Returns(Task.FromResult(container3Result));
         dockerComposeUtility.UpdateDockerFileForContainer(container22).Returns(Task.FromResult(container4Result));
         
-        var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService);
+        var containersApi = new ContainerApis(logger: logger, dockerComposeUtility: dockerComposeUtility, wudService: wudService, backgroundJobHelper: backgroundJobHelper);
         
         var res = await containersApi.ContainersSyncApi();
 
