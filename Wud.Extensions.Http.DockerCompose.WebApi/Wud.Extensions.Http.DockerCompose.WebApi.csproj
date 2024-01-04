@@ -11,5 +11,6 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0"/>
     <PackageReference Include="YamlDotNet" Version="13.7.1"/>
     <PackageReference Include="Semver" Version="*"/>
+    <PackageReference Include="Nito.AsyncEx" Version="*"/>
   </ItemGroup>
 </Project>
