@@ -15,6 +15,7 @@ public static class JsonUtils
     public static void UpdateSerializerOptions(this JsonSerializerOptions options)
     {
         options.Converters.Add(new JsonStringEnumConverter());
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     }
     
     public static readonly JsonSerializerOptions Options = lazyOptions.Value;
