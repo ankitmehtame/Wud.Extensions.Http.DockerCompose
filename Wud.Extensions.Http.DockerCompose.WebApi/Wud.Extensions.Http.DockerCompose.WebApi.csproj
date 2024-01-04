@@ -12,5 +12,7 @@
     <PackageReference Include="YamlDotNet" Version="13.7.1"/>
     <PackageReference Include="Semver" Version="*"/>
     <PackageReference Include="Nito.AsyncEx" Version="*"/>
+    <PackageReference Include="Hangfire.MemoryStorage" Version="*"/>
+    <PackageReference Include="Hangfire" Version="*"/>
   </ItemGroup>
 </Project>

@@ -1,20 +1,39 @@
 ﻿using System.Collections.Frozen;
+using Nito.AsyncEx;
+using Wud.Extensions.Http.DockerCompose.WebApi.Tests;
 
 namespace Wud.Extensions.Http.DockerCompose.WebApi;
 
-public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility dockerComposeUtility, IWudService wudService)
+public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility dockerComposeUtility, IWudService wudService, IBackgroundJobHelper backgroundJobHelper)
 {
+    private readonly AsyncLock syncLock = new ();
+
     public async Task<IResult> ContainerNewVersionApi(WudContainer container)
     {
         logger.LogInformation("{api} called - {container}", Constants.Api.CONTAINER_NEW_VERSION_API, container);
         var res = await dockerComposeUtility.UpdateDockerFileForContainer(container);
         var response = new Dictionary<string, UpdateResult> { { container.Name, res } };
+        await backgroundJobHelper.ScheduleOneTimeBackgroundSyncJobs();
         return Results.Json(response, statusCode: GetStatusCode(res));
     }
-
+    
     public async Task<IResult> ContainersSyncApi()
     {
-        logger.LogInformation("{api} called", Constants.Api.CONTAINERS_SYNC_API);
+        return await ContainersSyncApi(isInternal: false);
+    }
+
+    public async Task<IResult> ContainersSyncApiInternal()
+    {
+        return await ContainersSyncApi(isInternal: true);
+    }
+
+    private async Task<IResult> ContainersSyncApi(bool isInternal)
+    {
+        if (!isInternal)
+            logger.LogInformation("{api} called", Constants.Api.CONTAINERS_SYNC_API);
+        else
+            logger.LogInformation("Running background job - {api}", Constants.Api.CONTAINERS_SYNC_API);
+        using var oneSyncAtOnce = await syncLock.LockAsync();
         var allDockerFileContainers = (await Task.WhenAll(dockerComposeUtility.GetDockerFiles()
                 .Select(dockerComposeUtility.GetContainerNamesFromDockerFile)))
             .SelectMany(x => x).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
@@ -44,6 +63,7 @@ public class ContainerApis(ILogger<ContainerApis> logger, IDockerComposeUtility 
         else if (statusCodes.Distinct().Count() == 1) finalStatusCode = statusCodes.First();
         else if (statusCodes.Any(code => code < 300)) finalStatusCode = StatusCodes.Status206PartialContent;
         else finalStatusCode = statusCodes.Max();
+        logger.LogInformation("Result {result}", mapResult.ToJson());
         return Results.Json(mapResult, statusCode: finalStatusCode);
     }
 
