@@ -1,4 +1,4 @@
-﻿using System.Runtime.ExceptionServices;
+﻿using Nito.AsyncEx;
 using YamlDotNet.RepresentationModel;
 
 namespace Wud.Extensions.Http.DockerCompose.WebApi;
@@ -112,9 +112,12 @@ public class DockerComposeUtility(ILogger<DockerComposeUtility> logger, IEnviron
 
     private static readonly HashSet<string> NoImageTagVersions = ["latest"];
 
+    private readonly AsyncLock lockUpdateDockerFile = new ();
+
 
     public async Task<UpdateResult> UpdateDockerFileForContainer(WudContainer container)
     {
+        using var locked = await lockUpdateDockerFile.LockAsync();
         var dockerFiles = GetDockerFiles();
         List<string> listDockerFiles = new();
         foreach (var dockerFile in dockerFiles)
